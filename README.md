@@ -42,3 +42,26 @@ Prizes per special track:
 1. Read Cactus docs carefully: [Link](https://docs.cactuscompute.com/latest/)
 2. Read Gemma 4 on Cactus walkthrough carefully: [Link](https://docs.cactuscompute.com/latest/blog/gemma4/)
 3. Cactus & DeepMind team would be available on-site. 
+
+---
+
+## Our Project: Crisis Intake
+
+### What It Does
+A React Native iOS app that turns natural conversation into structured housing intake data on-device. A field worker sits with a displaced individual and just talks — the app listens, transcribes, extracts structured fields via Gemma 4 tool calling, and fills a visual form in real-time. Audio never persists. PII never leaves the device.
+
+### Why It Matters
+Housing intake for displaced individuals currently takes 30-60 minutes of rigid form-based Q&A. The caseworker reads questions, types answers, breaks eye contact, and processes the person rather than helping them. Our app does 90 seconds of natural conversation, extracts 20+ structured fields on-device, and generates a 30-day resource plan via sanitized cloud handoff.
+
+### Architecture
+- **On-device**: Gemma 4 E2B (INT4, ~400MB) for entity extraction via tool calling + document vision. Moonshine STT (61M) for transcription. Silero VAD for silence detection. All via Cactus React Native SDK.
+- **Pipeline**: Audio chunk → VAD → silence trigger → STT → editable transcript → Gemma 4 tool call → form fills (grey → amber → green) → audio buffer flushed
+- **Cloud (optional)**: Sanitized data (PII stripped) → Gemini 2.5 Flash → risk score + 30-day timeline + program matching
+- **Privacy**: Audio never written to disk. Images deleted after vision extraction. Confirmed fields can't be overwritten by AI. Sanitization strips names, DOB, phone, address before any cloud call.
+
+### Track
+Deepest Technical Integration / Best On-Device Enterprise Agent (B2B)
+
+### Docs
+- [Design Specification](docs/superpowers/specs/2026-04-18-crisis-intake-design.md)
+- [Implementation Plan](docs/plans/2026-04-18-crisis-intake-implementation.md)

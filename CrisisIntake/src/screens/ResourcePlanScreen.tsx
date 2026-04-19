@@ -16,6 +16,7 @@ import { useAppStore } from "../store/useAppStore";
 import { RiskScoreBadge } from "../components/cloud/RiskScoreBadge";
 import { TimelineView } from "../components/cloud/TimelineView";
 import { ProgramMatchCard } from "../components/cloud/ProgramMatchCard";
+import { SendPlanButton } from "../components/cloud/SendPlanButton";
 
 /**
  * Final screen of the intake flow. Reads cloudResult from the store and
@@ -155,6 +156,7 @@ export function ResourcePlanScreen() {
         </Section>
 
         <View style={styles.footer}>
+          <SendPlanButton />
           <PrimaryButton label="Start New Case" onPress={handleNewCase} />
         </View>
       </ScrollView>
@@ -289,6 +291,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingTop: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   primaryButton: {
     backgroundColor: theme.colors.accent,

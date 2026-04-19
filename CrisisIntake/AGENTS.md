@@ -169,6 +169,46 @@ generateResourcePlan(sanitized: SanitizedPayload, apiKey: string): Promise<Cloud
 
 ---
 
+## Agent 6: SMS Dispatch
+
+**Owns:** `src/services/sms.ts`, `src/components/cloud/SendPlanButton.tsx`, `src/components/cloud/SmsStatusBadge.tsx`, `src/types/sms.ts`
+
+**Builds:**
+- `formatPlanForSMS()` — renders a `CloudAnalysis` into a plain-text SMS body (GSM-7 friendly, auto-trims to fit `maxChars`).
+- `sendPlanSMS()` — sends the body to the survivor's phone.
+- `SendPlanButton` — CTA on `ResourcePlanScreen` that kicks off format + send.
+- `SmsStatusBadge` — pill showing formatting / composing / sent / cancelled / failed / queued.
+- Store additions: `smsStatus`, `smsError`, `smsSentAt` + `setSmsStatus`, `setSmsError`, `markSmsSent`, `resetSms`.
+
+**Interface contract:**
+```typescript
+formatPlanForSMS(plan: CloudAnalysis, opts?: FormatPlanOptions): string;
+sendPlanSMS(phoneNumber: string, body: string): Promise<SmsResult>;
+```
+
+**Store writes:** `smsStatus`, `smsError`, `smsSentAt`
+**Store reads:** `cloudResult`, `intake.phone_number`, `intake.client_first_name`
+
+**Why SMS:**
+- Survivors may not have a working smartphone / data plan after a disaster — SMS works on any phone.
+- Persistent, re-readable, forwardable to family, viewable at shelters.
+- No app install, no login, no internet on the receiving end.
+
+**Phase 1 (current):** Native iOS `MFMessageComposeViewController` via [`react-native-sms`](https://www.npmjs.com/package/react-native-sms). The field worker's iPhone opens the Messages app with the body pre-filled and the survivor's number pre-populated. The worker taps Send; the message goes via the worker's carrier. Zero backend. `sendPlanSMS` is currently a throw-at-runtime stub — install the native dep and flip the stub to enable.
+
+**Phase 2 (future):** Backend SMS via Twilio (or similar) from an org-owned long/short code. Enables 2-way reply, delivery receipts, bulk dispatch. `sendPlanSMS` body is the only file that changes; `formatPlanForSMS` and all UI stay identical.
+
+**Critical rules:**
+- SMS body is generated from the **unsanitized** local intake — it contains real names, addresses, phone numbers because it's going BACK to the survivor to be useful. This is the mirror of Agent 5's sanitization, which runs only on the OUTBOUND Gemini call.
+- Phone numbers are normalized to E.164 (`+14155551234`) before handing off to the native composer.
+- If `cloudResult` is null, button is disabled.
+- If `intake.phone_number` is empty, button is disabled and a helper message explains why.
+- Once `smsStatus === "sent"`, the button shows "Plan sent" and cannot be re-tapped (prevents accidental double-sends). `resetSession()` clears the flag.
+- The `maxChars` budget auto-trims the least-critical sections first (protective factors → unlikely programs → risk factors → older timeline days) before hard-truncating. Timeline action items and likely-program matches are never dropped unless the budget is catastrophically low.
+- Phase 1 MUST NOT send SMS on behalf of the survivor silently — the native composer always shows the body to the field worker for final review before Send.
+
+---
+
 ## Integration Points
 
 All agents connect through 3 shared layers:
@@ -184,3 +224,5 @@ The orchestrator in `IntakeSessionScreen.tsx` wires:
 - Agent 5's `sanitizeIntake` + `generateResourcePlan`
 
 Agent 4's `DocumentScanScreen` is a separate navigation route that calls Agent 2's extraction engine directly.
+
+Agent 6's `SendPlanButton` lives inside `ResourcePlanScreen` (next to "Start New Case") and fires after Agent 5 has produced a `CloudAnalysis`. It does not interact with the audio pipeline or extraction engine.

@@ -1789,5 +1789,94 @@ git tag v0.1.0-hackathon
 | 19-24 | Agent 3 | UI & Form (fields, sections, editor, completion bar) |
 | 25-28 | Agent 4 | Document Scanner (camera, preview, screen) |
 | 29-33 | Agent 5 | Cloud & Sanitization (sanitize, Gemini, risk score, timeline) |
+| 36-40 | Agent 6 | SMS Dispatch (format plan, native composer, send button, status badge) |
 | 34 | Integration | Orchestrator wiring |
 | 35 | Integration | End-to-end verification |
+
+---
+
+## Tasks 36-40: Agent 6 — SMS Dispatch
+
+**Branch:** `agent-6-sms-dispatch`
+
+**Goal:** After Agent 5 produces a `CloudAnalysis`, send the survivor a plain-text SMS containing their action plan. Survivors after a disaster often have no smartphone / data / app access — SMS is the universal fallback channel.
+
+**Phase 1 (Current):** iOS native `MFMessageComposeViewController` via [`react-native-sms`](https://www.npmjs.com/package/react-native-sms). The field worker's iPhone opens the Messages app with the body pre-filled. The worker reviews + taps Send; SMS goes out via the worker's carrier. Zero backend.
+
+**Phase 2 (Future):** Twilio backend from an org-owned long/short code. Enables 2-way reply, delivery receipts, bulk dispatch. Swap `sendPlanSMS` body only; interface + UI unchanged.
+
+### Task 36: SMS types
+
+- Create: `src/types/sms.ts`
+- Exports: `SmsStatus`, `SmsResult`, `FormatPlanOptions`
+
+```typescript
+export type SmsStatus =
+  | "idle" | "formatting" | "composing"
+  | "sent" | "cancelled" | "failed" | "queued";
+```
+
+### Task 37: SMS service
+
+- Create: `src/services/sms.ts`
+- Exports: `formatPlanForSMS()`, `sendPlanSMS()`, `normalizePhoneNumber()`
+- `formatPlanForSMS` must:
+  - Render GSM-7 friendly (no emoji / curly quotes) so segments stay 160 chars
+  - Be deterministic given same input (pure function — easy to unit test)
+  - Auto-trim to fit `maxChars`: drop protective factors → unlikely programs → risk factors → older timeline days before hard-truncating
+  - Never drop action items (Day N / housing, benefits, legal, medical) or likely-program matches unless the budget is catastrophically low
+
+### Task 38: Store additions
+
+- Modify: `src/store/useAppStore.ts`
+- Add fields: `smsStatus: SmsStatus`, `smsError: string | null`, `smsSentAt: number | null`
+- Add actions: `setSmsStatus`, `setSmsError`, `markSmsSent`, `resetSms`
+- `resetSession()` must reset all three SMS fields to their initial values.
+
+### Task 39: UI components
+
+- Create: `src/components/cloud/SendPlanButton.tsx` — green CTA button, reads `cloudResult` + `intake.phone_number` from the store, disables when either is missing or when SMS is in flight / already sent.
+- Create: `src/components/cloud/SmsStatusBadge.tsx` — compact pill rendering the current `smsStatus` (silent when `idle`).
+
+### Task 40: Wire into ResourcePlanScreen
+
+- Modify: `src/screens/ResourcePlanScreen.tsx`
+- Import `SendPlanButton` and place it inside the footer `<View>` above the existing `PrimaryButton label="Start New Case"`.
+- Add `gap: theme.spacing.md` to the footer styles so the two buttons breathe.
+
+### Enabling Phase 1 for real on a physical device
+
+The service ships as a throw-at-runtime stub so the app typechecks and bundles. To flip it on:
+
+```bash
+cd CrisisIntake
+npm install react-native-sms
+cd ios && pod install && cd ..
+```
+
+Then in `src/services/sms.ts`, replace the body of `sendPlanSMS` with:
+
+```typescript
+import SendSMS from "react-native-sms";
+export async function sendPlanSMS(phoneNumber: string, body: string): Promise<SmsResult> {
+  validatePhoneNumber(phoneNumber);
+  const to = normalizePhoneNumber(phoneNumber);
+  return new Promise<SmsResult>((resolve) => {
+    SendSMS.send(
+      { body, recipients: [to], successTypes: ["sent", "queued"], allowAndroidSendWithoutReadPermission: true },
+      (completed, cancelled, error) => {
+        if (completed) resolve({ status: "sent", completedAt: Date.now() });
+        else if (cancelled) resolve({ status: "cancelled", completedAt: Date.now() });
+        else resolve({ status: "failed", error: String(error) });
+      }
+    );
+  });
+}
+```
+
+### Critical rules
+
+- SMS body uses the **unsanitized** local intake (real names, addresses, numbers) because it's going BACK to the survivor. Mirror of Agent 5's sanitize-for-outbound-Gemini rule.
+- No silent sends in Phase 1 — always show the composer to the worker for final review.
+- Phone numbers normalized to E.164 (`+14155551234`) before handing off.
+- Once `smsStatus === "sent"`, button becomes "Plan sent" and is disabled until `resetSession()`.

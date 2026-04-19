@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { IntakeSchema, IntakeField, FieldMeta, FIELD_METADATA } from "../types/intake";
 import { TranscriptEntry } from "../types/transcript";
 import { CloudAnalysis } from "../types/cloud";
+import { SmsStatus } from "../types/sms";
 import { createEmptyIntake } from "../utils/createEmptyIntake";
 import { mergeExtractedFields } from "../utils/mergeFields";
 
@@ -33,6 +34,11 @@ interface AppState {
   cloudStatus: CloudStatus;
   cloudResult: CloudAnalysis | null;
 
+  // SMS (Agent 6) — status of dispatching the generated plan to the survivor
+  smsStatus: SmsStatus;
+  smsError: string | null;
+  smsSentAt: number | null;
+
   // Actions — Pipeline
   setPipelinePhase: (phase: PipelinePhase) => void;
   setModelsLoaded: (loaded: boolean) => void;
@@ -59,6 +65,12 @@ interface AppState {
   setCloudStatus: (status: CloudStatus) => void;
   setCloudResult: (result: CloudAnalysis) => void;
 
+  // Actions — SMS (Agent 6)
+  setSmsStatus: (status: SmsStatus) => void;
+  setSmsError: (error: string | null) => void;
+  markSmsSent: () => void;
+  resetSms: () => void;
+
   // Computed
   getCompletionPercentage: () => number;
   getFieldsBySection: (section: string) => Array<{ meta: FieldMeta; field: IntakeField }>;
@@ -81,6 +93,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   intake: createEmptyIntake(),
   cloudStatus: "idle",
   cloudResult: null,
+  smsStatus: "idle",
+  smsError: null,
+  smsSentAt: null,
 
   // Pipeline
   setPipelinePhase: (phase) => set({ pipelinePhase: phase }),
@@ -163,6 +178,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCloudStatus: (status) => set({ cloudStatus: status }),
   setCloudResult: (result) => set({ cloudResult: result }),
 
+  // SMS (Agent 6)
+  setSmsStatus: (status) => set({ smsStatus: status }),
+  setSmsError: (error) => set({ smsError: error }),
+  markSmsSent: () =>
+    set({ smsStatus: "sent", smsError: null, smsSentAt: Date.now() }),
+  resetSms: () => set({ smsStatus: "idle", smsError: null, smsSentAt: null }),
+
   // Computed
   getCompletionPercentage: () => {
     const intake = get().intake;
@@ -193,5 +215,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       intake: createEmptyIntake(),
       cloudStatus: "idle",
       cloudResult: null,
+      smsStatus: "idle",
+      smsError: null,
+      smsSentAt: null,
     }),
 }));

@@ -1,20 +1,31 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { CactusSTT } from "cactus-react-native";
-import { AudioRecorder, AudioManager } from "react-native-audio-api";
+import {
+  AudioRecorder,
+  AudioManager,
+  BitDepth,
+  FileDirectory,
+  FileFormat,
+  FlacCompressionLevel,
+  IOSAudioQuality,
+  decodeAudioData,
+} from "react-native-audio-api";
 
 export const AUDIO_PIPELINE_STT_MODEL = "whisper-small";
 
-const VAD_SPEECH_START_RMS_THRESHOLD = 0.028;
-const VAD_SPEECH_END_RMS_THRESHOLD = 0.016;
+const VAD_SPEECH_START_RMS_THRESHOLD = 0.018;
+const VAD_SPEECH_END_RMS_THRESHOLD = 0.009;
 const TARGET_SAMPLE_RATE = 16000;
 const CALLBACK_CHUNK_SECONDS = 0.1;
 const MAX_BUFFER_SECONDS = 24;
+const PRE_SPEECH_BUFFER_SECONDS = 0.5;
 const MIN_SPEECH_SECONDS_TO_TRIGGER = 2.0;
 const SILENCE_SECONDS_TO_TRIGGER = 2.0;
 const MAX_SPEECH_SECONDS_TO_TRIGGER = 20.0;
-const SPEECH_REENTRY_CONSECUTIVE_CHUNKS = 2;
+const SPEECH_REENTRY_CONSECUTIVE_CHUNKS = 1;
 const SILENCE_RESET_CONSECUTIVE_SPEECH_CHUNKS = 4;
+const STT_CLOUD_HANDOFF_THRESHOLD = 999;
 
 export function useAudioPipeline() {
   const [isListening, setIsListening] = useState(false);
@@ -26,6 +37,7 @@ export function useAudioPipeline() {
   const speechCandidateChunksRef = useRef(0);
   const silenceResetCandidateChunksRef = useRef(0);
   const recorderPausedRef = useRef(false);
+  const currentRecordingPathRef = useRef<string | null>(null);
 
   const speechSeconds = useAppStore((s) => s.speechSeconds);
   const silenceSeconds = useAppStore((s) => s.silenceSeconds);
@@ -61,6 +73,7 @@ export function useAudioPipeline() {
     speechCandidateChunksRef.current = 0;
     silenceResetCandidateChunksRef.current = 0;
     recorderPausedRef.current = false;
+    currentRecordingPathRef.current = null;
     setIsListening(false);
     useAppStore.getState().resetAudioCounters();
     useAppStore.getState().setPipelinePhase(nextPhase);
@@ -70,61 +83,83 @@ export function useAudioPipeline() {
     });
   }, []);
 
+  const startRecorderCapture = useCallback(() => {
+    const currentRecorder = recorder.current;
+    if (!currentRecorder) {
+      throw new Error("Recorder is not initialized");
+    }
+
+    const result = currentRecorder.start({
+      fileNameOverride: `intake-${Date.now()}`,
+    });
+    if (result.status === "error") {
+      throw new Error(result.message);
+    }
+
+    currentRecordingPathRef.current = result.path || null;
+    recorderPausedRef.current = false;
+    isListeningRef.current = true;
+    setIsListening(true);
+    useAppStore.getState().setPipelinePhase("listening");
+  }, []);
+
   const processTranscript = useCallback(async () => {
-    if (ringBuffer.current.length === 0 || processingRef.current) {
+    if (ringBuffer.current.length === 0 || processingRef.current || !recorder.current) {
       return;
     }
 
     processingRef.current = true;
-
-    const audioToTranscribe = ringBuffer.current.slice();
     const sourceSampleRate = captureSampleRateRef.current;
-    const durationSecs = (audioToTranscribe.length / sourceSampleRate).toFixed(1);
+    const bufferedSamples = ringBuffer.current.length;
+    const durationSecs = (bufferedSamples / sourceSampleRate).toFixed(1);
 
     ringBuffer.current = [];
     useAppStore.getState().resetAudioCounters();
     useAppStore.getState().setPipelinePhase("transcribing");
 
-    if (recorder.current?.isRecording()) {
-      recorder.current.pause();
-      recorderPausedRef.current = true;
-    }
+    const stopResult = recorder.current.stop();
+    recorderPausedRef.current = false;
+    isListeningRef.current = false;
+    setIsListening(false);
 
     console.log(
-      `[AudioPipeline] Processing transcript from ${audioToTranscribe.length} samples (${durationSecs}s @ ${sourceSampleRate}Hz)`
+      `[AudioPipeline] Processing transcript from ${bufferedSamples} samples (${durationSecs}s @ ${sourceSampleRate}Hz)`
     );
 
-    let shouldResumeListening = true;
+    let audioPath =
+      stopResult.status === "success" ? stopResult.path : currentRecordingPathRef.current;
+    currentRecordingPathRef.current = null;
 
     try {
+      if (stopResult.status === "error") {
+        throw new Error(stopResult.message);
+      }
+
+      console.log(
+        `[AudioPipeline] Finalized recording path=${stopResult.path} size=${stopResult.size} duration=${stopResult.duration}`
+      );
+
       if (!sttReady.current) {
         await stt.current.init();
         sttReady.current = true;
       }
 
-      let normalizedAudio = audioToTranscribe;
-      if (sourceSampleRate !== TARGET_SAMPLE_RATE) {
-        const ratio = sourceSampleRate / TARGET_SAMPLE_RATE;
-        const resampledLength = Math.max(1, Math.floor(audioToTranscribe.length / ratio));
-        normalizedAudio = new Array(resampledLength);
-
-        for (let i = 0; i < resampledLength; i += 1) {
-          const sourceIndex = i * ratio;
-          const index = Math.floor(sourceIndex);
-          const fraction = sourceIndex - index;
-          const a = audioToTranscribe[index] ?? 0;
-          const b = audioToTranscribe[index + 1] ?? a;
-          normalizedAudio[i] = a + (b - a) * fraction;
-        }
-
-        console.log(
-          `[AudioPipeline] Resampled ${audioToTranscribe.length} @ ${sourceSampleRate}Hz -> ${normalizedAudio.length} @ ${TARGET_SAMPLE_RATE}Hz`
-        );
+      if (!audioPath) {
+        throw new Error("Missing finalized recording path");
       }
 
+      const decodedAudio = await decodeAudioData(audioPath, TARGET_SAMPLE_RATE);
+      const decodedSampleRate = decodedAudio.sampleRate || TARGET_SAMPLE_RATE;
+      const decodedChannelCount = decodedAudio.numberOfChannels || 1;
+      const channelData = decodedAudio.getChannelData(0);
+
+      console.log(
+        `[AudioPipeline] Decoded WAV sampleRate=${decodedSampleRate} channels=${decodedChannelCount} frames=${channelData.length}`
+      );
+
       let peak = 0;
-      for (let i = 0; i < normalizedAudio.length; i += 1) {
-        const absValue = Math.abs(normalizedAudio[i] ?? 0);
+      for (let i = 0; i < channelData.length; i += 1) {
+        const absValue = Math.abs(channelData[i] ?? 0);
         if (absValue > peak) {
           peak = absValue;
         }
@@ -132,37 +167,33 @@ export function useAudioPipeline() {
 
       if (peak > 0.001) {
         const gain = 0.9 / peak;
-        for (let i = 0; i < normalizedAudio.length; i += 1) {
-          normalizedAudio[i] *= gain;
+        for (let i = 0; i < channelData.length; i += 1) {
+          channelData[i] *= gain;
         }
         console.log(
-          `[AudioPipeline] Normalized audio with peak=${peak.toFixed(4)} gain=${gain.toFixed(1)}x`
+          `[AudioPipeline] Normalized decoded audio with peak=${peak.toFixed(4)} gain=${gain.toFixed(1)}x`
         );
       }
 
-      const numSamples = normalizedAudio.length;
-      const pcmBytes = new Uint8Array(numSamples * 2);
+      const pcmBytes = new Uint8Array(channelData.length * 2);
       const pcmView = new DataView(pcmBytes.buffer);
-
-      for (let i = 0; i < numSamples; i += 1) {
-        const s = Math.max(-1, Math.min(1, normalizedAudio[i] ?? 0));
-        const int16Val = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      for (let i = 0; i < channelData.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, channelData[i] ?? 0));
+        const int16Val = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
         pcmView.setInt16(i * 2, int16Val, true);
       }
 
-      const audioBytes: number[] = new Array(pcmBytes.length);
-      for (let i = 0; i < pcmBytes.length; i += 1) {
-        audioBytes[i] = pcmBytes[i];
-      }
-
+      const audioBytes = Array.from(pcmBytes);
       console.log(
-        `[AudioPipeline] Sending ${audioBytes.length} PCM bytes (${numSamples} samples, ${(numSamples / TARGET_SAMPLE_RATE).toFixed(1)}s)`
+        `[AudioPipeline] Sending decoded PCM bytes to STT: ${audioBytes.length} bytes (${channelData.length} samples)`
       );
 
       const result = await stt.current.transcribe({
         audio: audioBytes,
         options: {
-          useVad: true,
+          useVad: false,
+          temperature: 0,
+          cloudHandoffThreshold: STT_CLOUD_HANDOFF_THRESHOLD,
         },
         onToken: (token) => {
           console.log(`[AudioPipeline] Token: "${token}"`);
@@ -178,29 +209,28 @@ export function useAudioPipeline() {
           callbackRef.current(result.response);
         }
 
-        shouldResumeListening = false;
         stopCapture("reviewing");
       } else {
         console.warn("[AudioPipeline] STT returned empty/failed result");
-        useAppStore.getState().setPipelinePhase("listening");
+        ringBuffer.current = [];
+        useAppStore.getState().resetAudioCounters();
+        speechActiveRef.current = false;
+        speechCandidateChunksRef.current = 0;
+        silenceResetCandidateChunksRef.current = 0;
+        startRecorderCapture();
       }
     } catch (error) {
       console.error("[AudioPipeline] STT failed:", error);
-      useAppStore.getState().setPipelinePhase("listening");
+      ringBuffer.current = [];
+      useAppStore.getState().resetAudioCounters();
+      speechActiveRef.current = false;
+      speechCandidateChunksRef.current = 0;
+      silenceResetCandidateChunksRef.current = 0;
+      startRecorderCapture();
     } finally {
       processingRef.current = false;
-
-      if (
-        shouldResumeListening &&
-        isListeningRef.current &&
-        recorderPausedRef.current &&
-        recorder.current
-      ) {
-        recorder.current.resume();
-        recorderPausedRef.current = false;
-      }
     }
-  }, [stopCapture]);
+  }, [startRecorderCapture, stopCapture]);
 
   const setupAudioProcess = useCallback(() => {
     if (!recorder.current) {
@@ -223,15 +253,6 @@ export function useAudioPipeline() {
           console.log(
             `[AudioPipeline] Audio callback sampleRate=${sampleRate}, frames=${inputData.length}`
           );
-        }
-
-        for (let i = 0; i < inputData.length; i += 1) {
-          ringBuffer.current.push(inputData[i] ?? 0);
-        }
-
-        const maxSamples = Math.round(sampleRate * MAX_BUFFER_SECONDS);
-        if (ringBuffer.current.length > maxSamples) {
-          ringBuffer.current.splice(0, ringBuffer.current.length - maxSamples);
         }
 
         let sumSquares = 0;
@@ -258,6 +279,23 @@ export function useAudioPipeline() {
         speechActiveRef.current = hasSpeech;
         const chunkDuration = inputData.length / sampleRate;
         const { speechSeconds: prevSp, silenceSeconds: prevSl } = useAppStore.getState();
+
+        for (let i = 0; i < inputData.length; i += 1) {
+          ringBuffer.current.push(inputData[i] ?? 0);
+        }
+
+        const maxSamples = Math.round(sampleRate * MAX_BUFFER_SECONDS);
+        if (ringBuffer.current.length > maxSamples) {
+          ringBuffer.current.splice(0, ringBuffer.current.length - maxSamples);
+        }
+
+        if (prevSp === 0 && !hasSpeech) {
+          const preSpeechSamples = Math.round(sampleRate * PRE_SPEECH_BUFFER_SECONDS);
+          if (ringBuffer.current.length > preSpeechSamples) {
+            ringBuffer.current.splice(0, ringBuffer.current.length - preSpeechSamples);
+          }
+        }
+
         if (rms > 0.005) {
           console.log(
             `[AudioPipeline] RMS=${rms.toFixed(4)} speech=${hasSpeech} sp=${prevSp.toFixed(1)}s sl=${prevSl.toFixed(1)}s thresholds=${VAD_SPEECH_START_RMS_THRESHOLD}/${VAD_SPEECH_END_RMS_THRESHOLD} speechCandidate=${speechCandidateChunksRef.current}/${SPEECH_REENTRY_CONSECUTIVE_CHUNKS} silenceResetCandidate=${silenceResetCandidateChunksRef.current}/${SILENCE_RESET_CONSECUTIVE_SPEECH_CHUNKS}`
@@ -349,6 +387,24 @@ export function useAudioPipeline() {
 
       if (!recorder.current) {
         recorder.current = new AudioRecorder();
+        const fileOutputResult = recorder.current.enableFileOutput({
+          directory: FileDirectory.Cache,
+          subDirectory: "CrisisIntake",
+          fileNamePrefix: "intake",
+          format: FileFormat.Wav,
+          channelCount: 1,
+          preset: {
+            sampleRate: TARGET_SAMPLE_RATE,
+            bitRate: 256000,
+            bitDepth: BitDepth.Bit16,
+            iosQuality: IOSAudioQuality.High,
+            flacCompressionLevel: FlacCompressionLevel.L0,
+          },
+        });
+
+        if (fileOutputResult.status === "error") {
+          throw new Error(fileOutputResult.message);
+        }
       }
 
       ringBuffer.current = [];
@@ -358,23 +414,16 @@ export function useAudioPipeline() {
       speechCandidateChunksRef.current = 0;
       silenceResetCandidateChunksRef.current = 0;
       recorderPausedRef.current = false;
+      currentRecordingPathRef.current = null;
       useAppStore.getState().resetAudioCounters();
 
       setupAudioProcess();
-
-      const result = recorder.current.start();
-      if (result.status === "error") {
-        throw new Error(result.message);
-      }
-
-      isListeningRef.current = true;
-      setIsListening(true);
-      useAppStore.getState().setPipelinePhase("listening");
+      startRecorderCapture();
     } catch (error) {
       console.error("[AudioPipeline] Failed to start audio pipeline:", error);
       stopCapture("idle");
     }
-  }, [modelsLoaded, setupAudioProcess, stopCapture]);
+  }, [modelsLoaded, setupAudioProcess, startRecorderCapture, stopCapture]);
 
   const stopListening = useCallback(() => {
     console.log("[AudioPipeline] stopListening called");

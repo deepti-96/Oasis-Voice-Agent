@@ -122,6 +122,11 @@ export function DocumentScanScreen() {
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current) return;
     setError(null);
+
+    // Track the working path in a local so the catch block can clean up
+    // even if the React state setter hasn't flushed yet.
+    let workingPath: string | null = null;
+
     try {
       const photo: PhotoFile = await cameraRef.current.takePhoto({
         flash: "off",
@@ -143,6 +148,7 @@ export function DocumentScanScreen() {
         await cleanupFile(srcPath);
       }
 
+      workingPath = destPath;
       setTempPath(destPath);
       setPhase("processing");
 
@@ -154,6 +160,7 @@ export function DocumentScanScreen() {
       // Extraction is done — file has served its purpose. Delete before
       // surfacing any preview so we never persist the image.
       await cleanupFile(destPath);
+      workingPath = null;
       setTempPath(null);
 
       setDelta(result ?? {});
@@ -161,11 +168,14 @@ export function DocumentScanScreen() {
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       setError(msg);
-      // On failure, still clean up whatever temp file we created.
-      if (tempPath) {
+      // On failure, still clean up whatever temp file we created. Prefer
+      // the local workingPath (guaranteed non-stale) over state.
+      if (workingPath) {
+        await cleanupFile(workingPath);
+      } else if (tempPath) {
         await cleanupFile(tempPath);
-        setTempPath(null);
       }
+      setTempPath(null);
       setPhase("camera");
       Alert.alert("Capture failed", msg);
     }

@@ -104,7 +104,7 @@ export function ExtractionPreview({
           onPress={onRetake}
           accessibilityRole={"button" as AccessibilityRole}
           accessibilityLabel="Retake photo"
-          style={({ pressed }) => [
+          style={({ pressed }: { pressed: boolean }) => [
             styles.secondaryButton,
             pressed && styles.buttonPressed,
           ]}
@@ -118,7 +118,7 @@ export function ExtractionPreview({
           accessibilityRole={"button" as AccessibilityRole}
           accessibilityLabel="Accept selected fields"
           accessibilityState={{ disabled: !hasAny || !hasSelection }}
-          style={({ pressed }) => [
+          style={({ pressed }: { pressed: boolean }) => [
             styles.primaryButton,
             (!hasAny || !hasSelection) && styles.primaryButtonDisabled,
             pressed && hasAny && hasSelection && styles.buttonPressed,
@@ -141,7 +141,7 @@ interface ExtractionChipProps {
   onRemove: () => void;
 }
 
-function ExtractionChip({ label, value, onRemove }: ExtractionChipProps) {
+const ExtractionChip: React.FC<ExtractionChipProps> = ({ label, value, onRemove }) => {
   return (
     <View style={styles.chip}>
       <View style={styles.chipTextColumn}>
@@ -157,7 +157,7 @@ function ExtractionChip({ label, value, onRemove }: ExtractionChipProps) {
         hitSlop={10}
         accessibilityRole={"button" as AccessibilityRole}
         accessibilityLabel={`Remove ${label}`}
-        style={({ pressed }) => [
+        style={({ pressed }: { pressed: boolean }) => [
           styles.chipRemoveButton,
           pressed && styles.buttonPressed,
         ]}
@@ -166,7 +166,7 @@ function ExtractionChip({ label, value, onRemove }: ExtractionChipProps) {
       </Pressable>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {

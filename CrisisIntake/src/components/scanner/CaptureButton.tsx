@@ -27,7 +27,7 @@ export function CaptureButton({
       accessibilityRole={"button" as AccessibilityRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         styles.button,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,

@@ -232,7 +232,7 @@ function PrimaryButton({
       onPress={onPress}
       accessibilityRole={"button" as AccessibilityRole}
       accessibilityLabel={label}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         styles.primaryButton,
         pressed && styles.primaryButtonPressed,
       ]}

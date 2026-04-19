@@ -39,7 +39,7 @@ const LIKELIHOOD_STYLES: Record<ProgramMatch["likelihood"], LikelihoodStyle> = {
  * Card for a single matched resource program: title, likelihood chip, and
  * a short human-readable reason the client qualifies (or doesn't).
  */
-export function ProgramMatchCard({ match }: ProgramMatchCardProps) {
+export const ProgramMatchCard: React.FC<ProgramMatchCardProps> = ({ match }) => {
   const style =
     LIKELIHOOD_STYLES[match.likelihood] ?? LIKELIHOOD_STYLES.possible;
 
@@ -63,7 +63,7 @@ export function ProgramMatchCard({ match }: ProgramMatchCardProps) {
       <Text style={styles.reason}>{match.reason}</Text>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   card: {

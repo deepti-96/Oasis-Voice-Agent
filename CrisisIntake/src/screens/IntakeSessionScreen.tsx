@@ -40,8 +40,10 @@ export function IntakeSessionScreen() {
         });
 
         if (engine) {
-          const currentIntake = useAppStore.getState().intake;
-          const delta = await engine.extractFromTranscript(transcript, currentIntake as IntakeSchema);
+          const delta = await engine.extractFromTranscript(
+            transcript,
+            () => useAppStore.getState().intake as IntakeSchema
+          );
 
           if (delta) {
             const filteredDelta = Object.fromEntries(

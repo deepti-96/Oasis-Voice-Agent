@@ -98,18 +98,24 @@ const VALID_KEYS = new Set([
  * Ensures the extracted data matches our schema types and removes garbage.
  */
 function sanitizeDelta(raw: any): Partial<Record<keyof IntakeSchema, any>> {
+  console.log("[Parser] sanitizeDelta input keys:", Object.keys(raw));
+  console.log("[Parser] sanitizeDelta raw:", JSON.stringify(raw));
   const sanitized: any = {};
-  
+
   for (const [key, value] of Object.entries(raw)) {
     // Only keep keys that exist in our schema
-    if (!VALID_KEYS.has(key)) continue;
-    
+    if (!VALID_KEYS.has(key)) {
+      console.log(`[Parser] Dropping unknown key: "${key}" = ${JSON.stringify(value)}`);
+      continue;
+    }
+
     // Skip empty, null, undefined, or "unknown" values
     if (value === null || value === undefined || value === "" || value === "unknown") continue;
-    
+
     // Type normalization
     if (key.includes("family_size") || key === "income_amount" || key === "homelessness_duration_days") {
       const num = parseNumberValue(value);
+      console.log(`[Parser] Number field "${key}": raw=${JSON.stringify(value)} → parsed=${num}`);
       if (num !== null) sanitized[key] = num;
       continue;
     }
@@ -122,5 +128,6 @@ function sanitizeDelta(raw: any): Partial<Record<keyof IntakeSchema, any>> {
     sanitized[key] = value;
   }
 
+  console.log("[Parser] sanitizeDelta output:", JSON.stringify(sanitized));
   return sanitized;
 }

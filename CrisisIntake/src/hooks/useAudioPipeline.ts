@@ -94,11 +94,21 @@ export function useAudioPipeline() {
       throw new Error("Recorder is not initialized");
     }
 
+    // Guard: don't start if already recording
+    if (currentRecorder.isRecording()) {
+      console.warn("[AudioPipeline] Recorder already recording, skipping start");
+      isListeningRef.current = true;
+      setIsListening(true);
+      useAppStore.getState().setPipelinePhase("listening");
+      return;
+    }
+
     const result = currentRecorder.start({
       fileNameOverride: `intake-${Date.now()}`,
     });
     if (result.status === "error") {
-      throw new Error(result.message);
+      console.warn("[AudioPipeline] Recorder start failed:", result.message);
+      return;
     }
 
     currentRecordingPathRef.current = result.path || null;

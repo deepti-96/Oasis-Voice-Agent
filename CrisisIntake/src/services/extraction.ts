@@ -14,7 +14,12 @@ const GEMMA4_HF_URL = "https://huggingface.co/Cactus-Compute/gemma-4-E2B-it/reso
 export class ExtractionEngine {
   private lm: CactusLM | null = null;
   private isModelLoading = false;
-  private isExtracting = false;
+  private extractionQueue: Array<{
+    transcript: string;
+    getCurrentFields: () => IntakeSchema;
+    resolve: (result: Partial<Record<keyof IntakeSchema, any>> | null) => void;
+  }> = [];
+  private isProcessingQueue = false;
 
   constructor() {}
 
@@ -98,22 +103,52 @@ export class ExtractionEngine {
 
   /**
    * Extracts data from a transcript segment using Gemma 4 on-device inference.
+   * Queues extractions so none are dropped — sequential execution guaranteed.
    */
   async extractFromTranscript(
     transcript: string,
-    currentFields: IntakeSchema
+    currentFields: IntakeSchema | (() => IntakeSchema)
   ): Promise<Partial<Record<keyof IntakeSchema, any>> | null> {
     if (!this.lm) {
       console.warn("[ExtractionEngine] Model not loaded.");
       return null;
     }
 
-    if (this.isExtracting) {
-      console.warn("[ExtractionEngine] Already extracting, skipping.");
-      return null;
+    const getCurrentFields = typeof currentFields === "function"
+      ? currentFields
+      : () => currentFields;
+
+    return new Promise<Partial<Record<keyof IntakeSchema, any>> | null>((resolve) => {
+      this.extractionQueue.push({ transcript, getCurrentFields, resolve });
+      console.log(`[ExtractionEngine] Queued extraction (queue size: ${this.extractionQueue.length}): "${transcript.slice(0, 80)}..."`);
+      this.processQueue();
+    });
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue) return;
+    this.isProcessingQueue = true;
+
+    while (this.extractionQueue.length > 0) {
+      const job = this.extractionQueue.shift()!;
+      console.log(`[ExtractionEngine] Processing queued extraction (${this.extractionQueue.length} remaining): "${job.transcript.slice(0, 80)}..."`);
+
+      try {
+        const result = await this.runExtraction(job.transcript, job.getCurrentFields());
+        job.resolve(result);
+      } catch (error) {
+        console.error("[ExtractionEngine] Queued extraction failed:", error);
+        job.resolve(null);
+      }
     }
 
-    this.isExtracting = true;
+    this.isProcessingQueue = false;
+  }
+
+  private async runExtraction(
+    transcript: string,
+    currentFields: IntakeSchema
+  ): Promise<Partial<Record<keyof IntakeSchema, any>> | null> {
     console.log(`[ExtractionEngine] Starting extraction with transcript: "${transcript}"`);
     try {
       // Build context of known fields
@@ -125,16 +160,37 @@ export class ExtractionEngine {
       const context = knownFields ? `Known: ${knownFields}. ` : "";
 
       // User-only messages — no system prompt (matches official Cactus SDK pattern)
+      const prompt = [
+        `${context}Extract ALL matching fields from the transcript below. Call extract_json_data with every field you can find.`,
+        ``,
+        `Rules:`,
+        `- client_first_name, client_last_name: exact names as spoken`,
+        `- date_of_birth: format as YYYY-MM-DD`,
+        `- gender: male, female, nonbinary, or other`,
+        `- family_size_adults: NUMBER of adults (e.g. "three adults" → 3)`,
+        `- family_size_children: NUMBER of children (e.g. "four children" → 4)`,
+        `- children_ages: comma-separated ages`,
+        `- housing_status: housed, at_risk, homeless, shelter, doubled_up, or fleeing_dv`,
+        `- homelessness_duration_days: NUMBER of days homeless`,
+        `- eviction_status: none, notice, filed, or judgment`,
+        `- employment_status: full_time, part_time, unemployed, disabled, or retired`,
+        `- income_amount: NUMBER (e.g. "$1200" → 1200)`,
+        `- income_frequency: weekly, biweekly, monthly, or annual`,
+        `- has_disability: true or false`,
+        `- safety_concern_flag: true if any mention of abuse, DV, danger`,
+        `- timeline_urgency: immediate, within_week, within_month, or flexible`,
+        `- All number fields MUST be numeric values, not words`,
+        ``,
+        `Transcript: "${transcript}"`,
+      ].join("\n");
+
       const messages = [
-        { 
-          role: "user" as const, 
-          content: `${context}Extract structured data from: "${transcript}"` 
-        }
+        { role: "user" as const, content: prompt }
       ];
-      
+
       console.log("[ExtractionEngine] Messages built, calling lm.complete()...");
-      
-      const result = await this.lm.complete({
+
+      const result = await this.lm!.complete({
         messages,
         tools: [updateIntakeFieldsTool],
       });
@@ -143,13 +199,11 @@ export class ExtractionEngine {
 
       const parsed = parseExtractionResult(result);
       console.log("[ExtractionEngine] Parsed Delta:", parsed);
-      
+
       return parsed;
     } catch (error) {
       console.error("[ExtractionEngine] Extraction failed:", error);
       return null;
-    } finally {
-      this.isExtracting = false;
     }
   }
 

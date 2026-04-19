@@ -8,7 +8,7 @@ export interface ExtractionEngineLike {
   isReady?: () => boolean;
   extractFromTranscript: (
     transcript: string,
-    currentFields: IntakeSchema
+    currentFields: IntakeSchema | (() => IntakeSchema)
   ) => Promise<ExtractionDelta | null>;
 }
 

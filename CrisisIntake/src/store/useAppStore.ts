@@ -7,6 +7,13 @@ import { mergeExtractedFields } from "../utils/mergeFields";
 
 type PipelinePhase = "idle" | "listening" | "transcribing" | "reviewing" | "extracting" | "scanning";
 type CloudStatus = "idle" | "sanitizing" | "sending" | "complete" | "error" | "queued";
+type DebugAudio = {
+  path: string;
+  sizeBytes: number;
+  durationSeconds: number;
+  sampleRate: number;
+  createdAt: number;
+};
 
 interface AppState {
   // Session
@@ -25,6 +32,7 @@ interface AppState {
   // Transcript
   currentTranscript: string | null;
   transcriptLog: TranscriptEntry[];
+  lastDebugAudio: DebugAudio | null;
 
   // Intake
   intake: IntakeSchema;
@@ -47,6 +55,7 @@ interface AppState {
   editCurrentTranscript: (text: string) => void;
   commitTranscript: (entry: TranscriptEntry) => void;
   clearCurrentTranscript: () => void;
+  setLastDebugAudio: (audio: DebugAudio | null) => void;
 
   // Actions — Intake
   mergeFields: (delta: Partial<Record<keyof IntakeSchema, any>>, source: "voice" | "vision") => void;
@@ -78,6 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   silenceSeconds: 0,
   currentTranscript: null,
   transcriptLog: [],
+  lastDebugAudio: null,
   intake: createEmptyIntake(),
   cloudStatus: "idle",
   cloudResult: null,
@@ -101,6 +111,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   commitTranscript: (entry) =>
     set((s) => ({ transcriptLog: [...s.transcriptLog, entry] })),
   clearCurrentTranscript: () => set({ currentTranscript: null }),
+  setLastDebugAudio: (audio) => set({ lastDebugAudio: audio }),
 
   // Intake
   mergeFields: (delta, source) =>
@@ -190,6 +201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       silenceSeconds: 0,
       currentTranscript: null,
       transcriptLog: [],
+      lastDebugAudio: null,
       intake: createEmptyIntake(),
       cloudStatus: "idle",
       cloudResult: null,

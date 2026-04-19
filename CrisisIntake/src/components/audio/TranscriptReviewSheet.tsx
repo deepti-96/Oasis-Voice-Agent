@@ -13,7 +13,7 @@ export function TranscriptReviewSheet({ onConfirm }: Props) {
   const [editedText, setEditedText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [countdown, setCountdown] = useState(5);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (currentTranscript) {

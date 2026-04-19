@@ -66,6 +66,22 @@ export function parseExtractionResult(result: any): Partial<Record<keyof IntakeS
   }
 }
 
+const WORD_NUMBERS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+  fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+  nineteen: 19, twenty: 20,
+};
+
+function parseNumberValue(value: any): number | null {
+  if (typeof value === "number" && !isNaN(value)) return value;
+  const str = String(value).trim().toLowerCase();
+  const direct = Number(str);
+  if (!isNaN(direct)) return direct;
+  if (str in WORD_NUMBERS) return WORD_NUMBERS[str];
+  return null;
+}
+
 /**
  * Valid keys from our intake schema.
  */
@@ -93,8 +109,8 @@ function sanitizeDelta(raw: any): Partial<Record<keyof IntakeSchema, any>> {
     
     // Type normalization
     if (key.includes("family_size") || key === "income_amount" || key === "homelessness_duration_days") {
-      const num = Number(value);
-      if (!isNaN(num)) sanitized[key] = num;
+      const num = parseNumberValue(value);
+      if (num !== null) sanitized[key] = num;
       continue;
     }
 

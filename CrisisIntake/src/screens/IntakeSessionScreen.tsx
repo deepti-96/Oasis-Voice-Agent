@@ -5,7 +5,10 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 import { useAppStore } from "../store/useAppStore";
-import { AUDIO_PIPELINE_STT_MODEL, useAudioPipeline } from "../hooks/useAudioPipeline";
+import {
+  AUDIO_PIPELINE_STT_MODEL,
+  useAudioPipeline,
+} from "../hooks/useAudioPipeline";
 import { RecordingIndicator } from "../components/audio/RecordingIndicator";
 import { IntakeForm } from "../components/form/IntakeForm";
 import { CompletionBar } from "../components/form/CompletionBar";
@@ -101,12 +104,12 @@ export function IntakeSessionScreen() {
         console.error("[Startup] Failed to load STT model:", e);
       }
     };
-
     if (!modelsLoaded) {
       loadModels();
     }
   }, [modelsLoaded, setModelsLoaded]);
 
+  // Preload extraction engine
   useEffect(() => {
     getExtractionEngine((model, progress) => {
       if (model === "llm") {
@@ -131,7 +134,7 @@ export function IntakeSessionScreen() {
             onPress={() => pipeline.isListening ? pipeline.stopListening() : pipeline.startListening()}
           >
             <Text style={styles.micButtonText}>
-              {pipeline.isListening ? "Stop" : "🎙 Listen"}
+              {pipeline.isListening ? "Stop" : "\u{1F3A4} Listen"}
             </Text>
           </Pressable>
         </View>

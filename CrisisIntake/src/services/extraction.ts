@@ -43,13 +43,11 @@ export class ExtractionEngine {
     
     this.isModelLoading = true;
     try {
-      let modelPath: string | null = null;
-
       try {
         console.log("[ExtractionEngine] Attempting to reuse local Gemma 4 model path...");
-        modelPath = await CactusFileSystem.getModelPath(GEMMA4_MODEL_NAME);
-        console.log("[ExtractionEngine] Reusing local Gemma 4 model path:", modelPath);
-        await this.initModelFromPath(modelPath);
+        const cachedPath: string = await CactusFileSystem.getModelPath(GEMMA4_MODEL_NAME);
+        console.log("[ExtractionEngine] Reusing local Gemma 4 model path:", cachedPath);
+        await this.initModelFromPath(cachedPath);
         if (onProgress) onProgress(100);
         console.log("[ExtractionEngine] Gemma 4 E2B loaded successfully from local cache.");
         return;
@@ -58,8 +56,9 @@ export class ExtractionEngine {
           "[ExtractionEngine] Local Gemma 4 reuse failed, falling back to download:",
           reuseError
         );
-        if (this.lm) {
-          await this.lm.destroy().catch(() => undefined);
+        const partialLm = this.lm as CactusLM | null;
+        if (partialLm) {
+          await partialLm.destroy().catch(() => undefined);
           this.lm = null;
         }
       }
@@ -82,10 +81,10 @@ export class ExtractionEngine {
       }
 
       console.log("[ExtractionEngine] Resolving local Gemma 4 model path...");
-      modelPath = await CactusFileSystem.getModelPath(GEMMA4_MODEL_NAME);
-      console.log("[ExtractionEngine] Model path:", modelPath);
+      const resolvedPath: string = await CactusFileSystem.getModelPath(GEMMA4_MODEL_NAME);
+      console.log("[ExtractionEngine] Model path:", resolvedPath);
 
-      await this.initModelFromPath(modelPath);
+      await this.initModelFromPath(resolvedPath);
       
       console.log("[ExtractionEngine] Gemma 4 E2B loaded successfully.");
     } catch (error) {

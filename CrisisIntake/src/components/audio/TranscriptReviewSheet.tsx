@@ -9,6 +9,7 @@ interface Props {
 
 export function TranscriptReviewSheet({ onConfirm }: Props) {
   const currentTranscript = useAppStore(s => s.currentTranscript);
+  const lastDebugAudio = useAppStore(s => s.lastDebugAudio);
   const [editedText, setEditedText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -67,6 +68,17 @@ export function TranscriptReviewSheet({ onConfirm }: Props) {
           {isEditing ? "Confirm Edit" : `Confirm (${countdown}s)`}
         </Text>
       </TouchableOpacity>
+      {lastDebugAudio && (
+        <View style={styles.debugCard}>
+          <Text style={styles.debugLabel}>DEBUG AUDIO</Text>
+          <Text style={styles.debugMeta}>
+            {`${lastDebugAudio.durationSeconds.toFixed(1)}s • ${Math.round(lastDebugAudio.sizeBytes / 1024)} KB • ${lastDebugAudio.sampleRate} Hz`}
+          </Text>
+          <Text selectable style={styles.debugPath}>
+            {lastDebugAudio.path}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -108,5 +120,25 @@ const styles = StyleSheet.create({
   buttonText: {
     ...theme.typography.h3,
     color: "#FFFFFF",
+  },
+  debugCard: {
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.background,
+  },
+  debugLabel: {
+    ...theme.typography.caption,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs,
+  },
+  debugMeta: {
+    ...theme.typography.caption,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.sm,
+  },
+  debugPath: {
+    ...theme.typography.caption,
+    color: theme.colors.textMuted,
   },
 });

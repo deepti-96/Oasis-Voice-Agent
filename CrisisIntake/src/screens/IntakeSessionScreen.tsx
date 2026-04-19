@@ -6,11 +6,15 @@ import { RecordingIndicator } from "../components/audio/RecordingIndicator";
 import { TranscriptReviewSheet } from "../components/audio/TranscriptReviewSheet";
 import { theme } from "../theme";
 import { CactusSTT } from "cactus-react-native";
+import { IntakeSchema } from "../types/intake";
+import { getExtractionEngine } from "../services/loadExtractionEngine";
 
 export function IntakeSessionScreen() {
   const pipeline = useAudioPipeline();
   const modelsLoaded = useAppStore(s => s.modelsLoaded);
   const setModelsLoaded = useAppStore(s => s.setModelsLoaded);
+  const currentTranscript = useAppStore(s => s.currentTranscript);
+  const intake = useAppStore(s => s.intake);
   
   // Download STT model on mount (VAD is energy-based, no model needed)
   useEffect(() => {
@@ -38,10 +42,85 @@ export function IntakeSessionScreen() {
     }
   }, [modelsLoaded, setModelsLoaded]);
 
-  const handleTranscriptConfirmed = () => {
-    console.log("Transcript confirmed");
+  useEffect(() => {
+    if (!modelsLoaded) {
+      return;
+    }
+
+    getExtractionEngine((model, progress) => {
+      if (model === "llm") {
+        useAppStore.getState().updateDownloadProgress("llm", progress);
+      }
+    }).catch((error) => {
+      console.warn("[IntakeSession] Extraction preload skipped:", error);
+    });
+  }, [modelsLoaded]);
+
+  const handleTranscriptConfirmed = async (editedText: string) => {
+    const rawText = currentTranscript ?? editedText;
+    const wasEdited = rawText !== editedText;
+    let fieldsExtracted: string[] = [];
+
     useAppStore.getState().clearCurrentTranscript();
-    useAppStore.getState().setPipelinePhase("idle");
+    useAppStore.getState().setPipelinePhase("extracting");
+
+    try {
+      const engine = await getExtractionEngine((model, progress) => {
+        if (model === "llm") {
+          useAppStore.getState().updateDownloadProgress("llm", progress);
+        }
+      });
+
+      if (!engine) {
+        console.warn("[IntakeSession] Extraction engine unavailable; skipping merge");
+      } else {
+        const delta = await engine.extractFromTranscript(
+          editedText,
+          intake as IntakeSchema
+        );
+
+        if (delta) {
+          const filteredDelta = Object.fromEntries(
+            Object.entries(delta).filter(([key, value]) => {
+              return Boolean(
+                intake[key as keyof IntakeSchema] &&
+                  value !== null &&
+                  value !== undefined &&
+                  value !== ""
+              );
+            })
+          ) as Partial<Record<keyof IntakeSchema, unknown>>;
+
+          const extractedFieldKeys = Object.keys(filteredDelta) as Array<keyof IntakeSchema>;
+
+          if (extractedFieldKeys.length > 0) {
+            useAppStore
+              .getState()
+              .mergeFields(
+                filteredDelta as Partial<Record<keyof IntakeSchema, any>>,
+                "voice"
+              );
+          }
+
+          fieldsExtracted = extractedFieldKeys.map((field) => field as string);
+        }
+      }
+    } catch (error) {
+      console.error("[IntakeSession] Transcript extraction failed:", error);
+    } finally {
+      useAppStore.getState().commitTranscript({
+        id: `${Date.now()}`,
+        rawText,
+        editedText,
+        wasEdited,
+        timestamp: Date.now(),
+        fieldsExtracted,
+      });
+      useAppStore.getState().setPipelinePhase("idle");
+      pipeline.startListening().catch((error) => {
+        console.warn("[IntakeSession] Failed to resume listening:", error);
+      });
+    }
   };
 
   return (

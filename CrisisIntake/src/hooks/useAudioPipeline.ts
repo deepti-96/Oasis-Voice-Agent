@@ -12,7 +12,7 @@ import {
   decodeAudioData,
 } from "react-native-audio-api";
 
-export const AUDIO_PIPELINE_STT_MODEL = "whisper-small";
+export const AUDIO_PIPELINE_STT_MODEL = "moonshine-base";
 
 const VAD_SPEECH_START_RMS_THRESHOLD = 0.018;
 const VAD_SPEECH_END_RMS_THRESHOLD = 0.009;
@@ -138,6 +138,14 @@ export function useAudioPipeline() {
       console.log(
         `[AudioPipeline] Finalized recording path=${stopResult.path} size=${stopResult.size} duration=${stopResult.duration}`
       );
+
+      useAppStore.getState().setLastDebugAudio({
+        path: stopResult.path,
+        sizeBytes: Math.round(stopResult.size * 1024 * 1024),
+        durationSeconds: stopResult.duration,
+        sampleRate: sourceSampleRate,
+        createdAt: Date.now(),
+      });
 
       if (!sttReady.current) {
         await stt.current.init();

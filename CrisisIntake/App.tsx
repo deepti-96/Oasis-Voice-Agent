@@ -2,7 +2,7 @@ import React from "react";
 import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
-import { createStackNavigator } from "@react-navigation/stack";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { IntakeSessionScreen } from "./src/screens/IntakeSessionScreen";
 import { DocumentScanScreen } from "./src/screens/DocumentScanScreen";
@@ -14,7 +14,7 @@ export type RootStackParamList = {
   ResourcePlan: undefined;
 };
 
-const Stack = createStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function App() {
   return (

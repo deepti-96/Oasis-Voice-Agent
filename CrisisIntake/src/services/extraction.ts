@@ -14,6 +14,7 @@ const GEMMA4_HF_URL = "https://huggingface.co/Cactus-Compute/gemma-4-E2B-it/reso
 export class ExtractionEngine {
   private lm: CactusLM | null = null;
   private isModelLoading = false;
+  private isExtracting = false;
 
   constructor() {}
 
@@ -108,6 +109,12 @@ export class ExtractionEngine {
       return null;
     }
 
+    if (this.isExtracting) {
+      console.warn("[ExtractionEngine] Already extracting, skipping.");
+      return null;
+    }
+
+    this.isExtracting = true;
     console.log(`[ExtractionEngine] Starting extraction with transcript: "${transcript}"`);
     try {
       // Build context of known fields
@@ -142,6 +149,8 @@ export class ExtractionEngine {
     } catch (error) {
       console.error("[ExtractionEngine] Extraction failed:", error);
       return null;
+    } finally {
+      this.isExtracting = false;
     }
   }
 

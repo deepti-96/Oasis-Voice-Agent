@@ -222,7 +222,9 @@ export function useAudioPipeline() {
           callbackRef.current(result.response);
         }
 
-        stopCapture("reviewing");
+        processingRef.current = false;
+        resetDetectionState();
+        startRecorderCapture();
       } else {
         console.warn("[AudioPipeline] STT returned empty/failed result");
         resetDetectionState();

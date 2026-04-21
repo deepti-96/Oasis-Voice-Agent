@@ -1,10 +1,10 @@
-# OASIS 
+# OASIS
 
 Voice-first intake for housing, disaster response, and frontline care.
 
 OASIS is a mobile app that helps frontline workers replace long, rigid intake forms with a natural conversation. Instead of spending 30 to 60 minutes typing through paperwork, a caseworker can simply talk with a client while the app captures and structures key case information in real time.
 
-The goal is to make intake faster, more private, and more human.
+![OASIS demo](assets/oasis-demo-loop-2x.gif)
 
 ## What OASIS does
 
@@ -12,7 +12,7 @@ The goal is to make intake faster, more private, and more human.
 - Helps workers capture housing, family, income, benefits, safety, and urgency information
 - Supports document scanning to pull in case details from paperwork
 - Sanitizes sensitive information before any cloud analysis
-- Generates a risk score, action timeline, and likely program matches
+- Generates a risk score, 30-day action timeline, and likely program matches
 
 ## The problem
 
@@ -24,7 +24,7 @@ OASIS is built to reduce that burden. It helps workers spend less time on forms 
 
 1. A worker starts an intake session.
 2. The app captures conversation and converts it into structured fields.
-3. The worker can review, edit, and confirm extracted information.
+3. The worker reviews, edits, and confirms extracted information.
 4. A document scan can add more case details.
 5. The app sanitizes sensitive data.
 6. A cloud analysis layer generates a risk score, 30-day action plan, and relevant program matches.

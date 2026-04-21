@@ -1,67 +1,88 @@
-<img src="assets/banner.png" alt="Logo" style="border-radius: 30px; width: 60%;">
+# OASIS
 
-## Context
-- Cactus (YC S25) is a low-latency engine for mobile devices & wearables. 
-- Cactus runs locally on edge devices with hybrid routing of complex tasks to cloud models like Gemini.
-- Google DeepMind just released Gemma 4, the first on-device model you can voice-prompt. 
-- Gemma 4 on Cactus is multimodal, supporting voice, vision, function calling, transcription and more! 
+Voice-first intake for housing, disaster response, and frontline care.
 
-## Challenge
-- All teams MUST build products that use Gemma 4 on Cactus. 
-- All products MUST leverage voice functionality in some way. 
-- All submissions MUST be working MVPs capable of venture backing. 
-- Winner takes all: Guaranteed YC Interview + GCP Credits. 
+OASIS is a mobile app that helps frontline workers replace long, rigid intake forms with a natural conversation. Instead of spending 30 to 60 minutes typing through paperwork, a caseworker can simply talk with a client while the app captures and structures key case information in real time.
 
-## Special Tracks 
-- Best On-Device Enterprise Agent (B2B): Highest commercial viability for offline tools.
-- Ultimate Consumer Voice Experience (B2C): Best use of low-latency compute to create ultra-natural, instantaneous voice interaction.
-- Deepest Technical Integration: Pushing the boundaries of the hardware/software stack (e.g., novel routing, multi-agent on-device setups, extreme power optimization).
+The goal is to make intake faster, more private, and more human.
 
-Prizes per special track: 
-- 1st Place: $2,000 in GCP credits
-- 2nd Place: $1,000 in GCP credits 
-- 3rd Place: $500 in GCP credits 
+## What OASIS does
 
-## Judging 
-- **Rubric 1**: The relevnance and realness of the problem and appeal to enterprises and VCs. 
-- **Rubric 2**: Correcness & quality of the MVP and demo. 
+- Turns a live conversation into structured intake data
+- Helps workers capture housing, family, income, benefits, safety, and urgency information
+- Supports document scanning to pull in case details from paperwork
+- Sanitizes sensitive information before any cloud analysis
+- Generates a risk score, action timeline, and likely program matches
 
-## Setup (clone this repo and hollistically follow)
-- Step 1: Fork this repo, clone to your Mac, open terminal.
-- Step 2: `git clone https://github.com/cactus-compute/cactus`
-- Step 3: `cd cactus && source ./setup && cd ..` (re-run in new terminal)
-- Step 4: `cactus build --python`
-- Step 5: `cactus download google/functiongemma-270m-it --reconvert`
-- Step 6: Get cactus key from the [cactus website](https://cactuscompute.com/dashboard/api-keys)
-- Sept 7: Run `cactus auth` and enter your token when prompted.
-- Step 8: `pip install google-genai` (if using cloud fallback) 
-- Step 9: Obtain Gemini API key from [Google AI Studio](https://aistudio.google.com/api-keys) (if using cloud fallback) 
-- Step 10: `export GEMINI_API_KEY="your-key"` (if using cloud fallback) 
+## The problem
 
-## Next steps
-1. Read Cactus docs carefully: [Link](https://docs.cactuscompute.com/latest/)
-2. Read Gemma 4 on Cactus walkthrough carefully: [Link](https://docs.cactuscompute.com/latest/blog/gemma4/)
-3. Cactus & DeepMind team would be available on-site. 
+Frontline intake is still slow, repetitive, and dehumanizing. Workers often have to ask rigid questions, type constantly, and break eye contact with people who are already in crisis.
 
----
+OASIS is built to reduce that burden. It helps workers spend less time on forms and more time helping people.
 
-## Our Project: Crisis Intake
+## How it works
 
-### What It Does
-A React Native iOS app that turns natural conversation into structured housing intake data on-device. A field worker sits with a displaced individual and just talks — the app listens, transcribes, extracts structured fields via Gemma 4 tool calling, and fills a visual form in real-time. Audio never persists. PII never leaves the device.
+1. A worker starts an intake session.
+2. The app captures conversation and converts it into structured fields.
+3. The worker can review, edit, and confirm extracted information.
+4. A document scan can add more case details.
+5. The app sanitizes sensitive data.
+6. A cloud analysis layer generates a risk score, 30-day action plan, and relevant program matches.
 
-### Why It Matters
-Housing intake for displaced individuals currently takes 30-60 minutes of rigid form-based Q&A. The caseworker reads questions, types answers, breaks eye contact, and processes the person rather than helping them. Our app does 90 seconds of natural conversation, extracts 20+ structured fields on-device, and generates a 30-day resource plan via sanitized cloud handoff.
+## Core ideas
 
-### Architecture
-- **On-device**: Gemma 4 E2B (INT4, ~400MB) for entity extraction via tool calling + document vision. Moonshine STT (61M) for transcription. Silero VAD for silence detection. All via Cactus React Native SDK.
-- **Pipeline**: Audio chunk → VAD → silence trigger → STT → editable transcript → Gemma 4 tool call → form fills (grey → amber → green) → audio buffer flushed
-- **Cloud (optional)**: Sanitized data (PII stripped) → Gemini 2.5 Flash → risk score + 30-day timeline + program matching
-- **Privacy**: Audio never written to disk. Images deleted after vision extraction. Confirmed fields can't be overwritten by AI. Sanitization strips names, DOB, phone, address before any cloud call.
+- Voice-first workflow
+- Privacy-first architecture
+- Human-in-the-loop review
+- Faster case triage and next-step planning
 
-### Track
-Deepest Technical Integration / Best On-Device Enterprise Agent (B2B)
+## Current product status
 
-### Docs
-- [Design Specification](docs/superpowers/specs/2026-04-18-crisis-intake-design.md)
-- [Implementation Plan](docs/plans/2026-04-18-crisis-intake-implementation.md)
+This repo contains an MVP foundation with partial implementation.
+
+Implemented:
+- React Native app shell and navigation
+- Global Zustand store for intake and workflow state
+- Document scan flow
+- Sanitization layer
+- Cloud resource-plan generation
+- Resource plan UI
+
+Still incomplete or scaffolded:
+- Main voice intake session orchestration
+- Full on-device audio pipeline
+- Full on-device extraction engine
+
+So the product direction is clear, and several key flows are built, but the full voice loop is not yet fully wired end to end.
+
+## Tech stack
+
+- React Native
+- TypeScript
+- Zustand
+- React Navigation
+- Vision Camera
+- React Native FS
+- AsyncStorage
+- React Native Config
+- Cactus React Native SDK
+
+## Privacy model
+
+OASIS is designed around privacy-first casework:
+
+- Sensitive intake data stays local as long as possible
+- Document images are temporary and deleted after extraction
+- Only sanitized payloads are sent for cloud analysis
+- Personally identifying information like name, phone number, and address is excluded from cloud handoff
+- Income is bucketed instead of sending exact values
+
+## Why now
+
+Housing systems, shelters, and disaster-response teams are overwhelmed. Staffing is tight, caseloads are growing, and workers need tools that save time immediately without compromising trust or privacy.
+
+OASIS gives teams a way to move faster, make better decisions, and preserve dignity during intake.
+
+## Vision
+
+OASIS can become the default intake layer for frontline care: voice-first, privacy-first, and built for real-world housing and crisis response workflows.
